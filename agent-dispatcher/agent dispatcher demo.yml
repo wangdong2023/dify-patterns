@@ -1,0 +1,393 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: agent dispatcher demo
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.1.0@a2dd9bb656a2722292e8936f3287d53ba176cfbbe9b8bfafc596d4a2ddd99eb2
+    version: null
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables:
+  - description: ''
+    id: 664862c9-dc9f-41dc-8589-9c05c5558f4a
+    name: Special_Agent
+    selector:
+    - conversation
+    - Special_Agent
+    value: Special
+    value_type: string
+  - description: ''
+    id: 73aa21d1-8e37-48d3-b13c-44d5660118ff
+    name: agent
+    selector:
+    - conversation
+    - agent
+    value: General
+    value_type: string
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: llm
+        targetType: answer
+      id: llm-answer
+      source: llm
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+    - data:
+        isInLoop: false
+        sourceType: question-classifier
+        targetType: llm
+      id: 1763467544794-1-llm-target
+      source: '1763467544794'
+      sourceHandle: '1'
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: 1763467300734-source-1763467310723-target
+      source: '1763467300734'
+      sourceHandle: source
+      target: '1763467310723'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: if-else
+      id: 1763462322951-source-1763468562544-target
+      source: '1763462322951'
+      sourceHandle: source
+      target: '1763468562544'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: question-classifier
+      id: 1763468562544-true-1763467544794-target
+      source: '1763468562544'
+      sourceHandle: 'true'
+      target: '1763467544794'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: question-classifier
+        targetType: assigner
+      id: 1763467544794-2-1763468792002-target
+      source: '1763467544794'
+      sourceHandle: '2'
+      target: '1763468792002'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: llm
+      id: 1763468562544-false-1763467300734-target
+      source: '1763468562544'
+      sourceHandle: 'false'
+      target: '1763467300734'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: assigner
+        targetType: llm
+      id: 1763468792002-source-1763467300734-target
+      source: '1763468792002'
+      sourceHandle: source
+      target: '1763467300734'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: Start
+        type: start
+        variables: []
+      height: 52
+      id: '1763462322951'
+      position:
+        x: -598.7442559301007
+        y: 548.083218014002
+      positionAbsolute:
+        x: -598.7442559301007
+        y: 548.083218014002
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}
+
+
+            {{#sys.files#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params: {}
+          mode: chat
+          name: qvq-max-latest
+          provider: langgenius/tongyi/tongyi
+        prompt_template:
+        - id: d277ef7c-16c8-4d46-a4c2-d40248b9ef6a
+          role: system
+          text: You are a general agent
+        selected: false
+        title: General Agent
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: llm
+      position:
+        x: 347.0997237278091
+        y: 288.14247016106253
+      positionAbsolute:
+        x: 347.0997237278091
+        y: 288.14247016106253
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#llm.text#}}'
+        selected: false
+        title: General Agent Reply
+        type: answer
+        variables: []
+      height: 103
+      id: answer
+      position:
+        x: 667.5542488051523
+        y: 288.14247016106253
+      positionAbsolute:
+        x: 667.5542488051523
+        y: 288.14247016106253
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: qvq-max-latest
+          provider: langgenius/tongyi/tongyi
+        prompt_template:
+        - id: cf17d17b-8cbd-487c-91ed-d5647c897a51
+          role: system
+          text: You are a special agent
+        selected: false
+        title: Special Agent
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: '1763467300734'
+      position:
+        x: 356.17797746815506
+        y: 712.9029439370977
+      positionAbsolute:
+        x: 356.17797746815506
+        y: 712.9029439370977
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#1763467300734.text#}}'
+        selected: false
+        title: Special Agent Reply
+        type: answer
+        variables: []
+      height: 103
+      id: '1763467310723'
+      position:
+        x: 679.3300898606698
+        y: 712.9029439370977
+      positionAbsolute:
+        x: 679.3300898606698
+        y: 712.9029439370977
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        classes:
+        - id: '1'
+          name: General
+        - id: '2'
+          name: Special
+        instructions: ''
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: qvq-max-latest
+          provider: langgenius/tongyi/tongyi
+        query_variable_selector:
+        - '1763462322951'
+        - sys.query
+        selected: false
+        title: Is Special Question
+        type: question-classifier
+        vision:
+          enabled: false
+      height: 170
+      id: '1763467544794'
+      position:
+        x: 14.091334565276554
+        y: 380.4071737203809
+      positionAbsolute:
+        x: 14.091334565276554
+        y: 380.4071737203809
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: 'true'
+          conditions:
+          - comparison_operator: is
+            id: e61a0e08-16b0-4e58-85b9-280f996a6d6d
+            numberVarType: variable
+            value: General
+            varType: string
+            variable_selector:
+            - conversation
+            - agent
+          id: 'true'
+          logical_operator: and
+        selected: false
+        title: Agent Dispatcher
+        type: if-else
+      height: 124
+      id: '1763468562544'
+      position:
+        x: -286.3855565867024
+        y: 548.083218014002
+      positionAbsolute:
+        x: -286.3855565867024
+        y: 548.083218014002
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        items:
+        - input_type: variable
+          operation: over-write
+          value:
+          - conversation
+          - Special_Agent
+          variable_selector:
+          - conversation
+          - agent
+          write_mode: over-write
+        selected: false
+        title: Send To Special Agent
+        type: assigner
+        version: '2'
+      height: 84
+      id: '1763468792002'
+      position:
+        x: 347.0997237278091
+        y: 492.4841632130959
+      positionAbsolute:
+        x: 347.0997237278091
+        y: 492.4841632130959
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: 578.8756048408334
+      y: 106.9808267045562
+      zoom: 0.6597539553864473
+  rag_pipeline_variables: []
