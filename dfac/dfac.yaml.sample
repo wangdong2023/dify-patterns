@@ -4,5 +4,4 @@ dify_base_url: http://localhost:5001
 console_email: "admin@example.com"
 console_password: "yourpassword"
 
-app_id: "your-app-id"
 workflow_id: "your-workflow-id"

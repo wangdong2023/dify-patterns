@@ -205,3 +205,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+dfac.yaml
+dfac/flow
+dfac_apps.yaml

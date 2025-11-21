@@ -4,8 +4,106 @@ import yaml
 import requests
 import typer
 from pathlib import Path
+import re
+import unicodedata
 
 app = typer.Typer(help="DFaC: Dify Flow as Code CLI (Console API Version)")
+
+# Windows 保留名称（大小写不敏感）
+WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1,10)),
+    *(f"LPT{i}" for i in range(1,10)),
+}
+
+APPS_MAP_FILE = Path("dfac_apps.yaml")
+
+def load_apps_map():
+    if APPS_MAP_FILE.exists():
+        return yaml.safe_load(APPS_MAP_FILE.read_text("utf-8"))
+    return {"apps": []}
+
+def save_apps_map(data):
+    APPS_MAP_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+def resolve_app_identifier(name_or_dir: str, apps_map: dict):
+    # 用户传 ID
+    if re.fullmatch(r"[0-9a-fA-F-]{36}", name_or_dir):
+        return name_or_dir
+
+    # 用户传目录
+    for entry in apps_map["apps"]:
+        if entry["dir"] == name_or_dir:
+            return entry["id"]
+
+    # 用户传 app name
+    for entry in apps_map["apps"]:
+        if entry["name"] == name_or_dir:
+            return entry["id"]
+
+    raise ValueError(f"找不到 app：{name_or_dir}")
+
+def allocate_dir_for_app(app_name: str, app_id: str, apps_map: dict):
+    base = ensure_filename(app_name)
+    dir_name = base
+
+    exists = {entry["dir"] for entry in apps_map["apps"]}
+
+    suffix = 2
+    while dir_name in exists:
+        dir_name = f"{base}_{suffix}"
+        suffix += 1
+
+    apps_map["apps"].append({
+        "name": app_name,
+        "id": app_id,
+        "dir": dir_name
+    })
+    save_apps_map(apps_map)
+    return dir_name
+
+def ensure_filename(name: str, extension: str | None = None) -> str:
+    """
+    Sanitize name for use as filename across Windows/macOS/Linux.
+    Converts name into a safe filesystem-friendly filename.
+
+    Args:
+        name (str): Input name
+        extension (str, optional): File extension like '.yaml'
+    """
+
+    # 1. Unicode Normalize（兼容各种字符，包括中文）
+    name = unicodedata.normalize("NFKC", name)
+
+    # 2. 替换非法字符（跨平台）
+    # Windows 禁止: \ / : * ? " < > |
+    # Linux 禁止: /
+    # macOS 禁止: :
+    invalid_chars = r'[\\/:*?"<>|\x00-\x1F]'
+    name = re.sub(invalid_chars, "_", name)
+
+    # 3. 去除前后空格与点（Windows 不允许以点或空格结尾）
+    name = name.strip(" .")
+
+    # 4. 空字符串则使用默认
+    if not name:
+        name = "unnamed"
+
+    # 5. Windows 保留关键字处理（大小写不敏感）
+    upper_name = name.upper()
+    if upper_name in WINDOWS_RESERVED_NAMES:
+        name = f"{name}_"
+
+    # 6. 合并重复下划线
+    name = re.sub(r"_+", "_", name)
+
+    # 7. 如果有扩展名则添加
+    if extension:
+        extension = extension if extension.startswith(".") else "." + extension
+        name = name + extension
+
+    return name
+
 
 # ---------------------------------------------------------
 # 加载 dfac.yaml
@@ -41,7 +139,11 @@ def load_config(config_path: Path = None):
 # ---------------------------------------------------------
 def console_login(base_url, email, password):
     url = f"{base_url}/console/api/login"
-    resp = requests.post(url, json={"email": email, "password": password})
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+    }
+    resp = requests.post(url, json={"email": email, "password": password}, headers=headers)
 
     if resp.status_code != 200:
         typer.secho(f"❌ 登录失败: {resp.status_code} {resp.text}", fg=typer.colors.RED)
@@ -68,8 +170,9 @@ def split_flow_to_files(dsl: dict, flow_dir: Path):
     nodes = []
 
     for node in dsl["workflow"]["graph"]["nodes"]:
-        node_id = node["id"]
-        node_file = nodes_dir / f"{node_id}.yaml"
+        node_name = node["data"]["title"]
+        node_name_path = ensure_filename(node_name)
+        node_file = nodes_dir / f"{node_name_path}.yaml"
         node = dict(node)
         node_data = dict(node)["data"]  # deep copy
 
@@ -77,8 +180,8 @@ def split_flow_to_files(dsl: dict, flow_dir: Path):
         if "prompt_template" in node_data:
             prompts = []
             for prompt in node_data["prompt_template"]: 
-                prompt_id = prompt["id"]
-                prompt_path = prompts_dir / f"{prompt_id}.md"
+                prompt_name = f"{node_name_path}__" + ensure_filename(prompt["role"])
+                prompt_path = prompts_dir / f"{prompt_name}.md"
                 prompt_path.write_text(prompt["text"], encoding="utf-8")
                 prompt["text"] = {"ref": f"{prompt_path}"}
                 prompts.append(prompt)
@@ -87,11 +190,11 @@ def split_flow_to_files(dsl: dict, flow_dir: Path):
         # --- script 拆分 ---
         if "code" in node_data and isinstance(node_data["code"], str):
             if "python" in node_data["code_language"]:
-                script_path = code_dir / f"{node_id}.py"
+                script_path = code_dir / f"{node_name_path}.py"
             elif "javascript" in node_data["code_language"]:
-                script_path = code_dir / f"{node_id}.js"
+                script_path = code_dir / f"{node_name_path}.js"
             else:
-                script_path = code_dir / f"{node_id}.txt"
+                script_path = code_dir / f"{node_name_path}.txt"
             script_path.write_text(node_data["code"], encoding="utf-8")
             node_data["code"] = {"ref": f"{script_path}"}
         node["data"] = node_data
@@ -151,15 +254,13 @@ def build_flow_from_files(flow_dir: Path):
     dsl["workflow"]["graph"]["nodes"] = nodes
     return dsl
 
-
-
 # ---------------------------------------------------------
 # dfac build
 # ---------------------------------------------------------
 @app.command()
-def build(config: str = typer.Option(None, help="指定 config 文件路径")):
-    cfg = load_config(Path(config) if config else None)
-    flow_json = build_flow_from_files(Path(cfg["flow_dir"]))
+def build(flow_path: str = typer.Argument(help="flow path")):
+    # cfg = load_config(Path(config) if config else None)
+    flow_json = build_flow_from_files(Path(flow_path))
     typer.echo(yaml.safe_dump(flow_json, allow_unicode=True))
 
 
@@ -167,65 +268,79 @@ def build(config: str = typer.Option(None, help="指定 config 文件路径")):
 # dfac pull (Dify → 本地)
 # ---------------------------------------------------------
 @app.command()
-def pull(config: str = typer.Option(None, help="config 文件路径")):
+def pull(config: str = typer.Option(None, help="config 文件路径"), 
+         app: str = typer.Argument(help="app id")):
     cfg = load_config(Path(config) if config else None)
-
     base = cfg["dify_base_url"]
-
-    workflow_id = cfg["workflow_id"]
     cookies = console_login(base, cfg["console_email"], cfg["console_password"])
     headers = {'X-Csrf-Token': cookies['csrf_token']}
     # 获取 DSL 定义
-    url = f"{base}/console/api/apps/{workflow_id}/export?include_secret=false"
+    url = f"{base}/console/api/apps/{app}/export?include_secret=false"
     resp = requests.get(url, cookies=cookies, headers=headers)
 
     if resp.status_code != 200:
-        typer.secho(f"❌ 获取 Workflow 失败: {resp.status_code} {resp.text}", fg="red")
+        typer.secho(f"❌ 获取 app 失败: {resp.status_code} {resp.text}", fg="red")
         raise typer.Exit(code=1)
 
     dsl = resp.json()['data']
     dsl = yaml.safe_load(dsl)
 
+    app_name = dsl["app"]["name"]
+    apps_map = load_apps_map()
+    dir_name = allocate_dir_for_app(app_name, app, apps_map)
+
     # 写入本地 main.yaml
-    flow_dir = Path(cfg["flow_dir"])
+    flow_dir = Path(cfg["flow_dir"]) / dir_name
     flow_dir.mkdir(parents=True, exist_ok=True)
 
     split_flow_to_files(dsl, flow_dir)
 
-    typer.secho("✔ 已写入 flow/main.yaml", fg="green")
+    typer.secho(f"✔ 已写入 {flow_dir}", fg="green")
 
 
 # ---------------------------------------------------------
 # dfac push (本地 → Dify)
 # ---------------------------------------------------------
 @app.command()
-def push(config: str = typer.Option(None, help="config 文件路径"), create_new: str = typer.Option(False, help="create new app")):
+def push(config: str = typer.Option(None, help="config 文件路径"), 
+         create_new: bool = typer.Option(False, help="create new app"),
+         app: str = typer.Argument(help="app id")):
     cfg = load_config(Path(config) if config else None)
+    apps_map = load_apps_map()
 
-    flow_dir = Path(cfg["flow_dir"])
+    # Step 1：根据用户输入（名称 / 目录 / id）找到实际 app_id
+    app_id = resolve_app_identifier(app, apps_map)
+    dir_name = next(entry["dir"] for entry in apps_map["apps"] if entry["id"] == app_id)
+
+    typer.secho(f"✔ 推送 app {dir_name}, id {app_id}", fg="green")
+
+    flow_dir = Path(cfg["flow_dir"]) / dir_name
     dsl = build_flow_from_files(flow_dir)
 
-    # print(dsl)
-
     base = cfg["dify_base_url"]
-    workflow_id = cfg["workflow_id"]
     cookies = console_login(base, cfg["console_email"], cfg["console_password"])
-    print(cookies)
-    headers = {'X-Csrf-Token': cookies['csrf_token']}
+
+    headers = {
+        'X-Csrf-Token': cookies['csrf_token'],
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+    }
     payload = {
         "mode": "yaml-content",
-        "yaml-content": dsl
+        "yaml_content": yaml.safe_dump(dsl, allow_unicode=True)
     }
+
     if not create_new:
-        payload["app_id"] = workflow_id
+        payload["app_id"] = app_id
     url = f"{base}/console/api/apps/imports"
-    resp = requests.post(url, headers=headers, json=payload)
+    resp = requests.post(url, headers=headers, cookies=cookies, json=payload)
 
     if resp.status_code not in [200, 201]:
+        print(resp.json())
         typer.secho(f"❌ 推送失败: {resp.status_code} {resp.text}", fg="red")
         raise typer.Exit(code=1)
 
-    # typer.secho("✔ Workflow 推送成功！", fg="green")
+    typer.secho("✔ app 推送成功！", fg="green")
 
 
 if __name__ == "__main__":
